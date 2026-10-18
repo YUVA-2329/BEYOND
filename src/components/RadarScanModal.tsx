@@ -12,6 +12,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   RotateCw,
+  Star,
+  Sparkles,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import {
   locationService,
@@ -41,12 +45,15 @@ export const RadarScanModal: React.FC<RadarScanModalProps> = ({
     state: locationService.getState(),
     coordinates: locationService.getCoordinates(),
     discoveries: [],
+    famousDiscoveries: [],
+    nearbyDiscoveries: [],
     message: locationService.getStateDescription(locationService.getState()),
     timestamp: new Date().toISOString(),
   });
 
   const [radiusKm, setRadiusKm] = useState<number>(15);
   const [isSweepActive, setIsSweepActive] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'nearby' | 'famous'>('all');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,34 +99,50 @@ export const RadarScanModal: React.FC<RadarScanModalProps> = ({
     await locationService.performRadarScan({ radiusKm });
   };
 
-  const { state, coordinates, discoveries, message } = scanResult;
+  const { state, coordinates, discoveries, famousDiscoveries = [], nearbyDiscoveries = [], message } = scanResult;
+
+  // Resolve 3 Famous & 3 Nearby
+  const resolvedFamous = famousDiscoveries.length > 0
+    ? famousDiscoveries
+    : discoveries.filter((d) => d.isFamous || ['famous-taj-mahal', 'famous-eiffel-tower', 'famous-colosseum'].includes(d.id)).slice(0, 3);
+
+  const resolvedNearby = nearbyDiscoveries.length > 0
+    ? nearbyDiscoveries
+    : discoveries.filter((d) => !d.isFamous && !['famous-taj-mahal', 'famous-eiffel-tower', 'famous-colosseum'].includes(d.id)).slice(0, 3);
+
+  const displayedList =
+    activeTab === 'nearby'
+      ? resolvedNearby
+      : activeTab === 'famous'
+      ? resolvedFamous
+      : [...resolvedNearby, ...resolvedFamous];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-2xl animate-fadeIn">
       <div
-        className="relative w-full max-w-2xl bg-[#080E18] border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl overflow-hidden font-sans flex flex-col max-h-[92vh]"
+        className="relative w-full max-w-2xl bg-[#080E18] border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl overflow-hidden font-sans flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient Radar Glow */}
         <div className="absolute top-0 right-1/2 translate-x-1/2 w-96 h-48 bg-[#00E599]/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Top Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-[#00E599]/15 border border-[#00E599]/30 flex items-center justify-center text-[#00E599]">
               <Radio size={18} className={isSweepActive ? 'animate-pulse' : ''} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-white font-display tracking-tight">
-                  RADAR SCAN
+                <h2 className="text-sm sm:text-base font-extrabold text-white font-display tracking-tight">
+                  RADAR SCAN EXPLORER
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00E599]/15 text-[#00E599] border border-[#00E599]/30">
-                  Live Range: {radiusKm} km
+                  Range: {radiusKm} km
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                {coordinates ? `${coordinates.city || 'Located'} (±${coordinates.accuracyMeters || 50}m accuracy)` : 'Explicit, privacy-preserving local radar'}
+                {coordinates ? `${coordinates.city || 'Located'} (±${coordinates.accuracyMeters || 50}m accuracy)` : '3 Famous Global Landmarks + 3 Local Gems'}
               </p>
             </div>
           </div>
@@ -134,12 +157,13 @@ export const RadarScanModal: React.FC<RadarScanModalProps> = ({
         </div>
 
         {/* Radar Graphic & State Control */}
-        <div className="py-4 flex flex-col sm:flex-row items-center gap-6 shrink-0 border-b border-white/10">
+        <div className="py-4 flex flex-col sm:flex-row items-center gap-5 sm:gap-6 shrink-0 border-b border-white/10">
           {/* Radar Screen Visual */}
           <div className="relative w-44 h-44 rounded-full bg-[#050911] border-2 border-[#00E599]/40 shadow-inner flex items-center justify-center overflow-hidden shrink-0">
             {/* Concentric Distance Rings */}
-            <div className="absolute w-32 h-32 rounded-full border border-[#00E599]/20" />
-            <div className="absolute w-20 h-20 rounded-full border border-[#00E599]/25" />
+            <div className="absolute w-36 h-36 rounded-full border border-amber-400/20" title="Celestial / Global Ring" />
+            <div className="absolute w-28 h-28 rounded-full border border-[#00E599]/20" />
+            <div className="absolute w-18 h-18 rounded-full border border-[#00E599]/25" />
             <div className="absolute w-8 h-8 rounded-full border border-[#00E599]/30" />
 
             {/* Crosshairs */}
@@ -151,19 +175,19 @@ export const RadarScanModal: React.FC<RadarScanModalProps> = ({
               <div
                 className="absolute inset-0 origin-center rounded-full pointer-events-none"
                 style={{
-                  background: 'conic-gradient(from 0deg, rgba(0,229,153,0.4) 0deg, rgba(0,229,153,0.05) 60deg, transparent 90deg, transparent 360deg)',
+                  background: 'conic-gradient(from 0deg, rgba(0,229,153,0.45) 0deg, rgba(0,229,153,0.06) 60deg, transparent 90deg, transparent 360deg)',
                   animation: 'radarSweep 2s linear infinite',
                 }}
               />
             )}
 
             {/* Center User Dot */}
-            <div className="relative z-10 w-3.5 h-3.5 rounded-full bg-[#00E599] border-2 border-white shadow-lg shadow-[#00E599]" />
+            <div className="relative z-10 w-3.5 h-3.5 rounded-full bg-[#00E599] border-2 border-white shadow-lg shadow-[#00E599]" title="Your Radar Center" />
 
-            {/* Blips for Detected Places */}
-            {discoveries.slice(0, 6).map((d, idx) => {
-              const angles = [35, 110, 195, 260, 315, 75];
-              const dists = [30, 48, 62, 54, 40, 68];
+            {/* 3 Inner Pulsing Green Blips for Nearby Places */}
+            {resolvedNearby.slice(0, 3).map((d, idx) => {
+              const angles = [45, 160, 290];
+              const dists = [26, 42, 34];
               const angle = angles[idx % angles.length];
               const dist = dists[idx % dists.length];
               const rad = (angle * Math.PI) / 180;
@@ -172,20 +196,39 @@ export const RadarScanModal: React.FC<RadarScanModalProps> = ({
 
               return (
                 <div
-                  key={d.id}
-                  className="absolute z-20 w-2.5 h-2.5 rounded-full bg-emerald-300 border border-white shadow-sm animate-ping"
-                  style={{
-                    transform: `translate(${x}px, ${y}px)`,
-                    animationDuration: `${2 + idx * 0.5}s`,
-                  }}
-                  title={d.title}
+                  key={`nearby-blip-${d.id}`}
+                  className="absolute z-20 w-3 h-3 rounded-full bg-emerald-400 border border-white shadow-md shadow-emerald-500/50 cursor-pointer animate-pulse"
+                  style={{ transform: `translate(${x}px, ${y}px)` }}
+                  title={`[Nearby] ${d.title} • ${d.distanceKm} km`}
                 />
+              );
+            })}
+
+            {/* 3 Outer Golden Star Blips for Famous World Landmarks */}
+            {resolvedFamous.slice(0, 3).map((d, idx) => {
+              const angles = [340, 110, 215];
+              const dists = [64, 66, 68];
+              const angle = angles[idx % angles.length];
+              const dist = dists[idx % dists.length];
+              const rad = (angle * Math.PI) / 180;
+              const x = Math.cos(rad) * dist;
+              const y = Math.sin(rad) * dist;
+
+              return (
+                <div
+                  key={`famous-blip-${d.id}`}
+                  className="absolute z-20 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-white shadow-lg shadow-amber-400/60 cursor-pointer flex items-center justify-center"
+                  style={{ transform: `translate(${x}px, ${y}px)` }}
+                  title={`[Famous Landmark] ${d.title}`}
+                >
+                  <span className="text-[7px] text-black font-black">★</span>
+                </div>
               );
             })}
           </div>
 
           {/* Controls & Status Explanation */}
-          <div className="flex-1 space-y-3 w-full">
+          <div className="flex-1 space-y-2.5 w-full">
             {/* Status Badge */}
             <div className="flex items-center gap-2">
               <span
@@ -270,11 +313,11 @@ export const RadarScanModal: React.FC<RadarScanModalProps> = ({
           </div>
         </div>
 
-        {/* Manual Destination Fallbacks (Crucial if permission denied or desktop without GPS) */}
+        {/* Manual Destination Fallbacks (If permission denied or desktop without GPS) */}
         {(state === 'permission_denied' || state === 'location_unavailable' || state === 'permission_not_requested') && (
-          <div className="py-3 px-3 bg-[#0D182A] rounded-2xl border border-white/5 my-2 shrink-0">
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Manual Destination Fallback:
+          <div className="py-2.5 px-3 bg-[#0D182A] rounded-2xl border border-white/5 my-2 shrink-0">
+            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+              Select City to Sweep:
             </span>
             <div className="flex items-center gap-2 flex-wrap">
               {Object.entries(KNOWN_CITY_FALLBACKS).map(([city, coords]) => (
@@ -291,77 +334,140 @@ export const RadarScanModal: React.FC<RadarScanModalProps> = ({
           </div>
         )}
 
-        {/* Discovered Spots List */}
-        <div className="flex-1 overflow-y-auto mt-3 space-y-2 pr-1 hide-scrollbar">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-300 pb-1">
-            <span>Discovered Nearby Spots ({discoveries.length})</span>
-            {coordinates && (
-              <span className="text-[10px] text-[#00E599] font-normal">
-                Centered near {coordinates.city || `${coordinates.lat}, ${coordinates.lng}`}
-              </span>
-            )}
+        {/* Segmented Filter Tabs: All (6) | Nearby (3) | Famous (3) */}
+        <div className="flex items-center justify-between pt-3 pb-2 shrink-0">
+          <div className="flex items-center gap-1.5 bg-[#0B1525] p-1 rounded-2xl border border-white/10">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'all'
+                  ? 'bg-[#00E599] text-[#050911] shadow-md'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              All Hits ({resolvedNearby.length + resolvedFamous.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('nearby')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                activeTab === 'nearby'
+                  ? 'bg-emerald-400 text-black shadow-md'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <MapPin size={12} className="text-[#00E599]" />
+              <span>📍 Nearby ({resolvedNearby.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('famous')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                activeTab === 'famous'
+                  ? 'bg-amber-400 text-black shadow-md'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Star size={12} className="text-amber-400 fill-amber-400" />
+              <span>🌟 Famous ({resolvedFamous.length})</span>
+            </button>
           </div>
 
-          {discoveries.length === 0 && state !== 'scanning' && (
+          {coordinates && (
+            <span className="text-[10px] text-[#00E599] font-mono hidden sm:inline">
+              📍 {coordinates.city || `${coordinates.lat}, ${coordinates.lng}`}
+            </span>
+          )}
+        </div>
+
+        {/* Discovered Spots List */}
+        <div className="flex-1 overflow-y-auto space-y-2 pr-1 hide-scrollbar">
+          {displayedList.length === 0 && state !== 'scanning' && (
             <div className="text-center py-8 text-xs text-slate-400">
               No spots scanned yet. Tap "ENABLE LOCATION" or "START RADAR SCAN" above to sweep your region.
             </div>
           )}
 
-          {discoveries.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => {
-                if (onSelectPlace) onSelectPlace(item.id);
-                if (onNavigate) onNavigate('screen_04_place_details', { discoveryId: item.id });
-                onClose();
-              }}
-              className="p-2.5 rounded-2xl bg-[#0F1A2D]/80 hover:bg-[#15243E] border border-white/10 flex items-center gap-3 transition-all cursor-pointer group"
-            >
-              <BeyondImage
-                src={item.imageUrl}
-                alt={item.title}
-                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-white/10"
-              />
+          {displayedList.map((item) => {
+            const isFamousItem = item.isFamous || ['famous-taj-mahal', 'famous-eiffel-tower', 'famous-colosseum'].includes(item.id);
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <h4 className="text-xs font-bold text-white truncate font-display group-hover:text-[#00E599] transition-colors">
-                    {item.title}
-                  </h4>
-                  {item.isHiddenGem && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Hidden Gem
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400">
-                  <span className="text-[#00E599] font-bold">{item.distanceKm} km away</span>
-                  <span>•</span>
-                  <span>{item.categories[0]}</span>
-                </div>
-
-                <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                  {item.location}
-                </p>
-              </div>
-
-              {/* Navigation Action */}
-              <a
-                href={getGoogleMapsDirectionsUrl(item.coordinates.lat, item.coordinates.lng, item.title)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="p-2 rounded-xl bg-white/5 hover:bg-[#00E599]/20 text-[#00E599] border border-white/10 transition-colors shrink-0"
-                title="Google Maps Navigation"
+            return (
+              <div
+                key={item.id}
+                onClick={() => {
+                  if (onSelectPlace) onSelectPlace(item.id);
+                  if (onNavigate) onNavigate('screen_04_place_details', { discoveryId: item.id });
+                  onClose();
+                }}
+                className={`p-3 rounded-2xl border transition-all cursor-pointer group flex items-center gap-3.5 ${
+                  isFamousItem
+                    ? 'bg-[#15171F] hover:bg-[#1E202B] border-amber-400/30'
+                    : 'bg-[#0F1A2D]/80 hover:bg-[#15243E] border-white/10'
+                }`}
               >
-                <Navigation size={14} />
-              </a>
+                <BeyondImage
+                  src={item.imageUrl}
+                  alt={item.title}
+                  className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-white/10 shadow-md"
+                />
 
-              <ChevronRight size={15} className="text-slate-500 group-hover:text-white shrink-0" />
-            </div>
-          ))}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-bold text-white truncate font-display group-hover:text-[#00E599] transition-colors">
+                      {item.title}
+                    </h4>
+                    {isFamousItem ? (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/40 shrink-0 flex items-center gap-1">
+                        <Star size={9} className="fill-amber-300" />
+                        <span>World Wonder</span>
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00E599]/15 text-[#00E599] border border-[#00E599]/30 shrink-0">
+                        Nearby Gem
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 flex-wrap">
+                    <span className={isFamousItem ? 'text-amber-300 font-bold' : 'text-[#00E599] font-bold'}>
+                      {item.distanceKm > 100 ? `${item.distanceKm.toLocaleString()} km` : `${item.distanceKm} km`}
+                    </span>
+                    <span>•</span>
+                    <span>{item.categories[0]}</span>
+                    {item.bearing !== undefined && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-300 flex items-center gap-1">
+                          <Compass size={11} className="text-cyan-400" />
+                          <span>{item.bearing}° {item.bearingDirection || ''}</span>
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    {item.location}
+                  </p>
+                </div>
+
+                {/* Direct Google Maps Navigation Button */}
+                <a
+                  href={getGoogleMapsDirectionsUrl(item.coordinates.lat, item.coordinates.lng, item.title)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className={`p-2.5 rounded-xl border transition-colors shrink-0 ${
+                    isFamousItem
+                      ? 'bg-amber-400/10 hover:bg-amber-400/25 text-amber-300 border-amber-400/30'
+                      : 'bg-white/5 hover:bg-[#00E599]/20 text-[#00E599] border-white/10'
+                  }`}
+                  title="Google Maps Navigation"
+                >
+                  <Navigation size={14} />
+                </a>
+
+                <ChevronRight size={16} className="text-slate-500 group-hover:text-white shrink-0" />
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

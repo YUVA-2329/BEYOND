@@ -45,6 +45,10 @@ export interface Discovery {
   isLiked: boolean;
   isSaved: boolean;
   isHiddenGem?: boolean;
+  isFamous?: boolean;
+  isNearby?: boolean;
+  bearing?: number;
+  bearingDirection?: string;
   usefulInfo?: UsefulInfo;
   spotlightReviews?: SpotlightReview[];
 }

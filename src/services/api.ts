@@ -182,4 +182,38 @@ export const api = {
     const res = await fetch(`${BASE_URL}/discoveries?lat=${lat}&lng=${lng}&radius=${radiusKm}`);
     return res.json();
   },
+
+  async getRadarPack(lat: number = 12.2958, lng: number = 76.6394, radiusKm: number = 15): Promise<{
+    famousPlaces: Discovery[];
+    nearbyPlaces: Discovery[];
+    allHits: Discovery[];
+    metadata: {
+      center: { lat: number; lng: number };
+      radiusKm: number;
+      accuracyMeters: number;
+      scannedCount: number;
+      timestamp: string;
+    };
+  }> {
+    const res = await fetch(`${BASE_URL}/places/radar?lat=${lat}&lng=${lng}&radius=${radiusKm}`);
+    return res.json();
+  },
+
+  async getFamousPlaces(lat?: number, lng?: number): Promise<Discovery[]> {
+    const params = new URLSearchParams();
+    if (lat) params.append('lat', lat.toString());
+    if (lng) params.append('lng', lng.toString());
+    const res = await fetch(`${BASE_URL}/places/famous?${params.toString()}`);
+    return res.json();
+  },
+
+  async syncGoogleSession(payload: { email: string; name?: string; avatarUrl?: string; id?: string }) {
+    const res = await fetch(`${BASE_URL}/auth/google-sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
 };
+

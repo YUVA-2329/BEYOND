@@ -44,6 +44,22 @@ export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lo
   return Math.round(R * c * 10) / 10;
 }
 
+export function calculateBearingDegrees(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  const θ = Math.atan2(y, x);
+  return Math.round(((θ * 180) / Math.PI + 360) % 360);
+}
+
+export function getBearingDirection(degrees: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const idx = Math.round(degrees / 45) % 8;
+  return dirs[idx];
+}
+
 export function sanitizeInput(input: string): string {
   if (typeof input !== 'string') return '';
   return input
@@ -54,6 +70,96 @@ export function sanitizeInput(input: string): string {
     .replace(/onload\s*=/gi, '')
     .trim();
 }
+
+export const FAMOUS_DISCOVERIES: Discovery[] = [
+  {
+    id: 'famous-taj-mahal',
+    title: 'Taj Mahal Royal Ivory Mausoleum',
+    location: 'Agra, Uttar Pradesh, India',
+    distanceKm: 1850.0,
+    coordinates: { lat: 27.1751, lng: 78.0421 },
+    description: 'UNESCO World Heritage masterpiece constructed of translucent white marble with symmetrical reflection pools, minarets, and Mughal calligraphy.',
+    categories: ['Heritage', 'Landmark', 'Photography'],
+    imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=800&auto=format&fit=crop&q=80',
+    author: {
+      id: 'world-heritage-foundation',
+      name: 'World Heritage Curator',
+      handle: '@world_wonders',
+      avatarUrl: '/intro/assets/sarath_reddy_avatar.png',
+      isFollowing: true,
+    },
+    createdAt: 'Verified World Wonder',
+    likesCount: 14290,
+    commentsCount: 1240,
+    isLiked: true,
+    isSaved: true,
+    isHiddenGem: false,
+    isFamous: true,
+    usefulInfo: {
+      bestTime: 'Sunrise (6:00 - 8:30 AM)',
+      entryFee: '₹50 (Indians) / ₹1100 (Foreigners)',
+      crowdLevel: 'High / Iconic',
+    },
+  },
+  {
+    id: 'famous-eiffel-tower',
+    title: 'Eiffel Tower Celestial Iron Spire',
+    location: 'Champ de Mars, Paris, France',
+    distanceKm: 7600.0,
+    coordinates: { lat: 48.8584, lng: 2.2945 },
+    description: 'Iconic 330-meter wrought-iron lattice tower offering breathtaking 360-degree panoramic viewing decks across the Seine and Parisian skyline.',
+    categories: ['Landmark', 'Viewpoint', 'Photography'],
+    imageUrl: 'https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=800&auto=format&fit=crop&q=80',
+    author: {
+      id: 'world-heritage-foundation',
+      name: 'World Heritage Curator',
+      handle: '@world_wonders',
+      avatarUrl: '/intro/assets/sarath_reddy_avatar.png',
+      isFollowing: true,
+    },
+    createdAt: 'Verified World Wonder',
+    likesCount: 19850,
+    commentsCount: 2104,
+    isLiked: true,
+    isSaved: true,
+    isHiddenGem: false,
+    isFamous: true,
+    usefulInfo: {
+      bestTime: 'Twilight (7:30 - 10:00 PM with sparkle)',
+      entryFee: '€28.30 (Top Floor Lift)',
+      crowdLevel: 'High',
+    },
+  },
+  {
+    id: 'famous-colosseum',
+    title: 'Flavian Amphitheatre (Colosseum)',
+    location: 'Piazza del Colosseo, Rome, Italy',
+    distanceKm: 6950.0,
+    coordinates: { lat: 41.8902, lng: 12.4922 },
+    description: 'The largest ancient amphitheatre ever built, featuring monumental travertine limestone arches, subterranean hypogeum, and 2,000-year gladiatorial legacy.',
+    categories: ['Heritage', 'Landmark', 'Architecture'],
+    imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&auto=format&fit=crop&q=80',
+    author: {
+      id: 'world-heritage-foundation',
+      name: 'World Heritage Curator',
+      handle: '@world_wonders',
+      avatarUrl: '/intro/assets/sarath_reddy_avatar.png',
+      isFollowing: true,
+    },
+    createdAt: 'Verified World Wonder',
+    likesCount: 16400,
+    commentsCount: 1580,
+    isLiked: true,
+    isSaved: true,
+    isHiddenGem: false,
+    isFamous: true,
+    usefulInfo: {
+      bestTime: 'Morning (8:30 - 11:00 AM)',
+      entryFee: '€18 (Standard Admission)',
+      crowdLevel: 'Moderate to High',
+    },
+  },
+];
 
 interface StoreData {
   discoveries: Discovery[];
@@ -67,6 +173,7 @@ interface StoreData {
 }
 
 const INITIAL_DISCOVERIES: Discovery[] = [
+  ...FAMOUS_DISCOVERIES,
   {
     id: 'golconda-fort-sunset',
     title: 'Golconda Fort Sunset Panorama',
@@ -934,7 +1041,18 @@ class BeyondStore {
       }
       if (fs.existsSync(STORE_FILE)) {
         const raw = fs.readFileSync(STORE_FILE, 'utf-8');
-        return JSON.parse(raw);
+        const parsed: StoreData = JSON.parse(raw);
+        let updated = false;
+        for (const fam of FAMOUS_DISCOVERIES) {
+          if (!parsed.discoveries.some((d) => d.id === fam.id)) {
+            parsed.discoveries.unshift(fam);
+            updated = true;
+          }
+        }
+        if (updated) {
+          this.saveData(parsed);
+        }
+        return parsed;
       }
     } catch (e) {
       console.warn('Failed to load store, initializing defaults:', e);
@@ -1002,6 +1120,72 @@ class BeyondStore {
 
   public getDiscoveryById(id: string): Discovery | undefined {
     return this.data.discoveries.find((d) => d.id === id);
+  }
+
+  public getFamousPlaces(lat: number = 12.2958, lng: number = 76.6394): Discovery[] {
+    const famousIds = ['famous-taj-mahal', 'famous-eiffel-tower', 'famous-colosseum'];
+    return this.data.discoveries
+      .filter((d) => d.isFamous || famousIds.includes(d.id))
+      .slice(0, 3)
+      .map((d) => {
+        const dist = haversineDistanceKm(lat, lng, d.coordinates.lat, d.coordinates.lng);
+        const deg = calculateBearingDegrees(lat, lng, d.coordinates.lat, d.coordinates.lng);
+        return {
+          ...d,
+          distanceKm: dist,
+          bearing: deg,
+          bearingDirection: getBearingDirection(deg),
+          isFamous: true,
+        };
+      });
+  }
+
+  public getNearbyPlaces(lat: number = 12.2958, lng: number = 76.6394, radiusKm: number = 25): Discovery[] {
+    const famousIds = ['famous-taj-mahal', 'famous-eiffel-tower', 'famous-colosseum'];
+    const nonFamous = this.data.discoveries.filter(
+      (d) => !d.isFamous && !famousIds.includes(d.id)
+    );
+    const withDist = nonFamous.map((d) => {
+      const dist = haversineDistanceKm(lat, lng, d.coordinates.lat, d.coordinates.lng);
+      const deg = calculateBearingDegrees(lat, lng, d.coordinates.lat, d.coordinates.lng);
+      return {
+        ...d,
+        distanceKm: dist,
+        bearing: deg,
+        bearingDirection: getBearingDirection(deg),
+        isNearby: true,
+      };
+    });
+    withDist.sort((a, b) => a.distanceKm - b.distanceKm);
+    return withDist.slice(0, 3);
+  }
+
+  public getRadarPack(lat: number = 12.2958, lng: number = 76.6394, radiusKm: number = 15): {
+    famousPlaces: Discovery[];
+    nearbyPlaces: Discovery[];
+    allHits: Discovery[];
+    metadata: {
+      center: { lat: number; lng: number };
+      radiusKm: number;
+      accuracyMeters: number;
+      scannedCount: number;
+      timestamp: string;
+    };
+  } {
+    const famousPlaces = this.getFamousPlaces(lat, lng);
+    const nearbyPlaces = this.getNearbyPlaces(lat, lng, radiusKm);
+    return {
+      famousPlaces,
+      nearbyPlaces,
+      allHits: [...nearbyPlaces, ...famousPlaces],
+      metadata: {
+        center: { lat, lng },
+        radiusKm,
+        accuracyMeters: 50,
+        scannedCount: famousPlaces.length + nearbyPlaces.length,
+        timestamp: new Date().toISOString(),
+      },
+    };
   }
 
   public createDiscovery(newDiscovery: Omit<Discovery, 'id' | 'createdAt' | 'likesCount' | 'commentsCount' | 'isLiked' | 'isSaved'>): Discovery {
@@ -1228,6 +1412,12 @@ class BeyondStore {
   public getUserByToken(token: string): UserAccount | null {
     if (!token) return null;
     const cleanToken = token.replace(/^Bearer\s+/i, '').trim();
+
+    // Check dynamic users (e.g. Google / Supabase sessions)
+    const users = this.getUsers();
+    const match = users.find((u) => u.token === cleanToken || u.id === cleanToken);
+    if (match) return match;
+
     if (cleanToken === 'token_sarath_reddy_12345' || cleanToken === 'token_test_explorer') {
       return {
         id: 'sarath-reddy',

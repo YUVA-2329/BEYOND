@@ -6,6 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { store } from './server/dataStore';
 import { aiService } from './server/aiService';
+import { extractAuth, requireAuth, requireAdmin, AuthenticatedRequest } from './server/middleware/auth';
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ async function startServer() {
 
   app.use(express.json({ limit: '20mb' }));
   app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+  app.use(extractAuth);
 
   // Security Headers Middleware
   app.use((_req, res, next) => {
@@ -105,7 +107,7 @@ async function startServer() {
         email,
         name: name || email.split('@')[0],
         avatarUrl,
-        role: email.includes('admin') ? 'admin' : 'explorer',
+        role: email.toLowerCase().includes('admin') ? 'admin' : 'explorer',
       });
       res.json({
         success: true,
@@ -115,6 +117,34 @@ async function startServer() {
       });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to sync Firebase session', details: err?.message });
+    }
+  });
+
+  // Auth: Google & Supabase OAuth Session Synchronization
+  app.post(['/api/auth/google-sync', '/api/auth/supabase-sync'], (req, res) => {
+    try {
+      const { email, name, avatarUrl, id } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required for session sync' });
+      }
+      const user = store.recordUserSession({
+        email,
+        name: name || email.split('@')[0],
+        avatarUrl: avatarUrl || '/intro/assets/rohit_avatar.png',
+        role: email.toLowerCase().includes('admin') ? 'admin' : 'explorer',
+      });
+      if (id) {
+        // Map user id if supplied from Supabase
+        user.id = id;
+      }
+      res.json({
+        success: true,
+        user,
+        token: user.token,
+        message: 'Google / Supabase session synchronized successfully with BEYOND backend',
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to sync Google/Supabase session', details: err?.message });
     }
   });
 
@@ -211,8 +241,46 @@ async function startServer() {
     });
   });
 
+  // Radar Search Results Pack: 3 Famous Landmarks + 3 Scanned Nearby Places
+  app.get(['/api/places/radar', '/api/discoveries/radar'], (req, res) => {
+    try {
+      const lat = req.query.lat ? parseFloat(req.query.lat as string) : 12.2958;
+      const lng = req.query.lng ? parseFloat(req.query.lng as string) : 76.6394;
+      const radius = req.query.radius ? parseFloat(req.query.radius as string) : 15;
+      const pack = store.getRadarPack(lat, lng, radius);
+      res.json(pack);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to execute radar scan', details: err?.message });
+    }
+  });
+
+  // Top 3 World Famous Landmarks
+  app.get(['/api/places/famous', '/api/discoveries/famous'], (req, res) => {
+    try {
+      const lat = req.query.lat ? parseFloat(req.query.lat as string) : 12.2958;
+      const lng = req.query.lng ? parseFloat(req.query.lng as string) : 76.6394;
+      const famous = store.getFamousPlaces(lat, lng);
+      res.json(famous);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to fetch famous landmarks', details: err?.message });
+    }
+  });
+
+  // Top 3 Scanned Nearby Places
+  app.get(['/api/places/nearby', '/api/discoveries/nearby'], (req, res) => {
+    try {
+      const lat = req.query.lat ? parseFloat(req.query.lat as string) : 12.2958;
+      const lng = req.query.lng ? parseFloat(req.query.lng as string) : 76.6394;
+      const radius = req.query.radius ? parseFloat(req.query.radius as string) : 25;
+      const nearby = store.getNearbyPlaces(lat, lng, radius);
+      res.json(nearby);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to fetch nearby places', details: err?.message });
+    }
+  });
+
   // Discoveries Feed (with optional category, query, lat, lng, radius)
-  app.get('/api/discoveries', (req, res) => {
+  app.get(['/api/discoveries', '/api/places'], (req, res) => {
     try {
       const category = (req.query.category as string) || undefined;
       const query = (req.query.q as string) || undefined;
@@ -227,7 +295,7 @@ async function startServer() {
   });
 
   // Single Discovery
-  app.get('/api/discoveries/:id', (req, res) => {
+  app.get(['/api/discoveries/:id', '/api/places/:id'], (req, res) => {
     try {
       const item = store.getDiscoveryById(req.params.id);
       if (!item) {
@@ -239,26 +307,69 @@ async function startServer() {
     }
   });
 
-  // Delete Discovery
-  app.delete('/api/discoveries/:id', (req, res) => {
+  // Delete Discovery — STRICTLY PROTECTED: ONLY ADMIN CAN DELETE IT!
+  app.delete(['/api/discoveries/:id', '/api/places/:id'], requireAdmin, (req: AuthenticatedRequest, res) => {
     try {
       const ok = store.deleteDiscovery(req.params.id);
       if (!ok) return res.status(404).json({ error: 'Discovery not found' });
-      res.json({ success: true, id: req.params.id });
+      console.log(`[ADMIN AUDIT] Verified Admin Deleted Discovery: ${req.params.id} (Authorized: ${req.user?.email || 'admin-secret'})`);
+      res.json({
+        success: true,
+        id: req.params.id,
+        message: 'Discovery deleted successfully by verified administrator.',
+        deletedBy: req.user?.name || 'Administrator',
+      });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to delete discovery', details: err?.message });
     }
   });
 
-  // Create Discovery
-  app.post('/api/discoveries', (req, res) => {
+  // Admin Discovery Management: Dedicated Admin List with Deletion Access
+  app.get('/api/admin/discoveries', requireAdmin, (_req: AuthenticatedRequest, res) => {
     try {
-      const { title, location, categories, description, imageUrl, coordinates, usefulInfo } = req.body;
+      const discoveries = store.getDiscoveries();
+      res.json({
+        discoveries,
+        total: discoveries.length,
+        adminDeletionAuthorized: true,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to fetch admin discoveries', details: err?.message });
+    }
+  });
+
+  // Dedicated Admin Delete Route
+  app.delete('/api/admin/discoveries/:id', requireAdmin, (req: AuthenticatedRequest, res) => {
+    try {
+      const ok = store.deleteDiscovery(req.params.id);
+      if (!ok) return res.status(404).json({ error: 'Discovery not found' });
+      console.log(`[ADMIN AUDIT] Admin Portal Purged Discovery: ${req.params.id}`);
+      res.json({ success: true, id: req.params.id, message: 'Purged by Administrator' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to purge discovery', details: err?.message });
+    }
+  });
+
+  // Create Discovery (Supports Google / Supabase Authenticated Explorers)
+  app.post(['/api/discoveries', '/api/places'], (req: AuthenticatedRequest, res) => {
+    try {
+      const { title, location, categories, description, imageUrl, coordinates, usefulInfo, author } = req.body;
       if (!title || !description) {
         return res.status(400).json({ error: 'Title and description are required' });
       }
 
+      // Resolve author: prefer authenticated session (Google / Supabase / Store user)
+      const sessionUser = req.user;
       const currentUser = store.getCurrentUser();
+
+      const authorPayload = {
+        id: author?.id || sessionUser?.id || currentUser.id,
+        name: author?.name || sessionUser?.name || currentUser.name,
+        handle: author?.handle || sessionUser?.handle || currentUser.handle,
+        avatarUrl: author?.avatarUrl || sessionUser?.avatarUrl || currentUser.avatarUrl,
+        isFollowing: true,
+      };
+
       const created = store.createDiscovery({
         title,
         location: location || 'Mysuru, Karnataka',
@@ -267,13 +378,7 @@ async function startServer() {
         description,
         categories: categories && categories.length ? categories : ['Viewpoint'],
         imageUrl: imageUrl || '/intro/assets/chamundi_hills_sunset.png',
-        author: {
-          id: currentUser.id,
-          name: currentUser.name,
-          handle: currentUser.handle,
-          avatarUrl: currentUser.avatarUrl,
-          isFollowing: true,
-        },
+        author: authorPayload,
         isHiddenGem: req.body.isHiddenGem ?? true,
         usefulInfo: usefulInfo || {
           bestTime: 'Sunset (5:00 - 6:30 PM)',
@@ -282,6 +387,7 @@ async function startServer() {
         },
       });
 
+      console.log(`[POST DISCOVERY] Created "${created.title}" by ${authorPayload.name} (${authorPayload.handle})`);
       res.status(201).json(created);
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to create discovery', details: err?.message });

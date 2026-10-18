@@ -42,6 +42,8 @@ export interface RadarScanResult {
   state: LocationState;
   coordinates: LocationCoordinates | null;
   discoveries: Discovery[];
+  famousDiscoveries: Discovery[];
+  nearbyDiscoveries: Discovery[];
   message: string;
   error?: string;
   timestamp: string;
@@ -57,6 +59,8 @@ class LocationService {
   private currentState: LocationState = 'permission_not_requested';
   private currentCoords: LocationCoordinates | null = null;
   private lastResults: Discovery[] = [];
+  private famousResults: Discovery[] = [];
+  private nearbyResults: Discovery[] = [];
   private listeners: Array<(result: RadarScanResult) => void> = [];
   private abortController: AbortController | null = null;
 
@@ -82,6 +86,8 @@ class LocationService {
       state: this.currentState,
       coordinates: this.currentCoords,
       discoveries: this.lastResults,
+      famousDiscoveries: this.famousResults,
+      nearbyDiscoveries: this.nearbyResults,
       message,
       error,
       timestamp: new Date().toISOString(),
@@ -100,6 +106,8 @@ class LocationService {
       state: this.currentState,
       coordinates: this.currentCoords,
       discoveries: this.lastResults,
+      famousDiscoveries: this.famousResults,
+      nearbyDiscoveries: this.nearbyResults,
       message: this.getStateDescription(this.currentState),
       timestamp: new Date().toISOString(),
     };
@@ -229,12 +237,16 @@ class LocationService {
     this.abortController = new AbortController();
 
     try {
-      const results = await api.getNearbyDiscoveries(coords.lat, coords.lng, radiusKm);
-      this.lastResults = Array.isArray(results) ? results : [];
+      const pack = await api.getRadarPack(coords.lat, coords.lng, radiusKm);
+      this.famousResults = pack?.famousPlaces || [];
+      this.nearbyResults = pack?.nearbyPlaces || [];
+      this.lastResults = pack?.allHits || [...this.nearbyResults, ...this.famousResults];
 
       if (this.lastResults.length > 0) {
         this.currentState = 'results_found';
-        this.notify(`Radar scan found ${this.lastResults.length} places within ${radiusKm} km.`);
+        this.notify(
+          `Radar scan found ${this.nearbyResults.length} nearby gems + ${this.famousResults.length} world-famous landmarks.`
+        );
       } else {
         this.currentState = 'no_results';
         this.notify(`No places found within ${radiusKm} km. Try a larger radius or select another city.`);

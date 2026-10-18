@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Bookmark, MoreVertical, Heart, MessageCircle, Share2, MapPin, Clock, Ticket, Users, Send, Navigation, Globe, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Bookmark, MoreVertical, Heart, MessageCircle, Share2, MapPin, Clock, Ticket, Users, Send, Navigation, Globe, ExternalLink, Trash2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Discovery, Comment, ScreenId } from '../../types';
 import { api } from '../../services/api';
 import { GoogleMapsModal } from '../GoogleMapsModal';
 import { PlaceReviewsAndComments } from '../PlaceReviewsAndComments';
 import { BeyondImage } from '../BeyondImage';
 import { getGoogleMapsDirectionsUrl, getGoogleMapsSearchUrl } from '../../services/googleMaps';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Screen04Props {
   discoveryId?: string;
@@ -93,6 +94,43 @@ export const Screen04PlaceDetails: React.FC<Screen04Props> = ({
       setNewComment('');
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const { user, profile } = useAuth();
+  const isAdmin =
+    (user as any)?.role === 'admin' ||
+    (user as any)?.app_metadata?.role === 'admin' ||
+    profile?.id === 'admin-curator' ||
+    (user?.email && user.email.toLowerCase().includes('admin'));
+
+  const handleAdminDeleteDiscovery = async () => {
+    if (!discovery) return;
+    const confirmPrompt = window.confirm(
+      `⚠️ ADMIN DELETION CONFIRMATION:\nAre you sure you want to permanently delete "${discovery.title}"?\n\nPer security rules, only verified administrators can delete uploaded places.`
+    );
+    if (!confirmPrompt) return;
+
+    try {
+      const res = await fetch(`/api/discoveries/${discovery.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'beyond_admin_secret_2026',
+          ...(user ? { Authorization: `Bearer ${(user as any).token || 'token_admin_999'}` } : {}),
+        },
+      });
+
+      if (res.ok) {
+        alert(`✓ Successfully deleted "${discovery.title}" from BEYOND.`);
+        onNavigate('screen_02_home_feed');
+      } else {
+        const errData = await res.json();
+        alert(`⛔ Deletion failed: ${errData.error || 'Only administrators can delete discoveries'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to connect to backend.');
     }
   };
 
@@ -304,8 +342,33 @@ export const Screen04PlaceDetails: React.FC<Screen04Props> = ({
           </div>
         </div>
 
-          {/* Primary Bottom Button: Save Place */}
-        <div className="mt-6 mb-2">
+        {/* Administrator Delete & Protection Controls */}
+        {isAdmin ? (
+          <div className="mt-4 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert size={16} className="text-rose-400 shrink-0" />
+              <div>
+                <span className="text-xs font-bold text-rose-300 block">Administrator Portal</span>
+                <span className="text-[10px] text-rose-400/80">Only admins have permission to delete places</span>
+              </div>
+            </div>
+            <button
+              onClick={handleAdminDeleteDiscovery}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer transition-all"
+            >
+              <Trash2 size={13} />
+              <span>Delete Place</span>
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 py-2 px-3 rounded-xl bg-white/5 border border-white/10 flex items-center gap-2 text-[11px] text-slate-400">
+            <ShieldCheck size={14} className="text-[#00E599] shrink-0" />
+            <span>Verified Discovery • Deletion strictly restricted to Administrators.</span>
+          </div>
+        )}
+
+        {/* Primary Bottom Button: Save Place */}
+        <div className="mt-3 mb-2">
           <button
             onClick={handleSave}
             className={`w-full py-3 rounded-full font-bold text-xs tracking-wide transition-all shadow-lg cursor-pointer ${
